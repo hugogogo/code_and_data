@@ -8,6 +8,8 @@ rm(raw)
 # Install ggplot2
 library("ggplot2")
 library("ggrepel")
+
+cost_order <- rank(costs, ties.method = "random")
 # our method with regular costs
 type_ez <- type[inc_our]
 fac_type <- unique(type_ez)
@@ -22,7 +24,8 @@ type_ez <- factor(type_ez, levels = levels(type_ez)[c(1, 4, 2, 3)])
 mydf <- data.frame(Cost = unique(measure_cost[1, ]),
                    AUC = unique(measure_accu[1, ]),
                    Type = type_ez,
-                   Id = inc_our)
+                   Id = cost_order[inc_our],
+                   VarCost = costs[inc_our])
 mydf$Name <- paste(mydf$Id, ":", name[inc_our], sep = "")
 
 pdf("path.pdf", height = 9, width = 10)
@@ -64,7 +67,8 @@ type_ez <- factor(type_ez, levels = levels(type_ez)[c(1, 4, 2, 3)])
 mydf <- data.frame(Cost = unique(measure_cost[2, ]),
                    AUC = unique(measure_accu[2, ]),
                    Type = type_ez,
-                   Id = inc_uw)
+                   Id = cost_order[inc_uw],
+                   VarCost = costs[inc_uw])
 mydf$Name <- paste(mydf$Id, ":", name[inc_uw], sep = "")
 
 pdf("path_uw.pdf", height = 9, width = 10)
@@ -103,7 +107,8 @@ type_ez <- factor(type_ez, levels = levels(type_ez)[c(1, 4, 2, 3)])
 mydf <- data.frame(Cost = unique(measure_cost[3, ]),
                    AUC = unique(measure_accu[3, ]),
                    Type = type_ez,
-                   Id = inc_our_exp)
+                   Id = cost_order[inc_our_exp],
+                   VarCost = costs[inc_our_exp])
 mydf$Name <- paste(mydf$Id, ":", name[inc_our_exp], sep = "")
 
 pdf("path_exp.pdf", height = 9, width = 10)

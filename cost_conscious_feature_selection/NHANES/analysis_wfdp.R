@@ -2,7 +2,7 @@
 set.seed(123)
 rm(list = ls())
 library(glmnet)
-library(mknockoff)
+library(cheapknockoff)
 library(knockoff)
 library(ROCR)
 load("diabetes.RData")
@@ -83,7 +83,7 @@ run_lr <- function(x, y, x_te, family){
 }
 
 ## compute weighted fdp
-compute_measure <- function(out, costs, truth, alpha = 0.2, y_te){
+compute_measure <- function(out, costs, truth, alpha = 0.2){
   p <- length(out$path)
   wfdp <- rep(NA, length = p)
   fdp <- rep(NA, length = p)
@@ -91,7 +91,6 @@ compute_measure <- function(out, costs, truth, alpha = 0.2, y_te){
   ubr <- rep(NA, length = p)
   ubo <- rep(NA, length = p)
   cost <- rep(NA, length = p)
-  auc <- rep(NA, length = p)
   for(i in seq(p)){
     select <- out$path[[i]]
     cost[i] <- sum(costs[select])
@@ -108,16 +107,13 @@ compute_measure <- function(out, costs, truth, alpha = 0.2, y_te){
     # upper bounds for ours and Katesvich&Ramdas
     ub[i] <- (1 + (i - length(select))) / max(sum(costs[select]), 1)
     ubr[i] <- (1 + (i - length(select))) / max(length(select), 1)
-    # prediction performance in terms of AUC
-    pred <- prediction(out$pred[[i]], y_te)
-    auc[i] <- performance(pred, measure = "auc")@y.values[[1]]
   }
   ub <- max(costs / log(costs - (costs - 1) * (alpha))) * (-log(alpha)) * ub
   ubr <- (-log(alpha)) / log(2 - alpha)  * ubr
   wo <- costs[-truth]
   ubo <- max(wo / log(wo - (wo - 1) * (alpha))) * (-log(alpha)) * ub
   
-  return(list(wfdp = wfdp, fdp = fdp, ub = ub, ubr = ubr, ubo = ubo, cost = cost, auc = auc))
+  return(list(wfdp = wfdp, fdp = fdp, ub = ub, ubr = ubr, ubo = ubo, cost = cost))
 }
 
 #################################################
@@ -132,10 +128,23 @@ y_tr <- as.numeric(y[idx_tr])
 # first run LR to get the "truth"
 truth <- glm(formula = y~., family = "binomial", data = data.frame(y = y_tr, x = x_tr))
 thresh <- 0.01
+thresh_fwer <- thresh / p
 # S is the set of variables that we "believe" to be the "truth"
-S <- as.integer(which(summary(truth)$coefficients[-1, 4] <= thresh))
+S <- as.integer(which(summary(truth)$coefficients[-1, 4] <= thresh_fwer))
 
 name[head(order(summary(truth)$coefficients[-1, 4]), length(S))]
+
+# alternative method to approximate the true set
+# backward selection using AIC
+# back <- stepAIC(truth, trace = FALSE)
+
+# we consider the partially-simulated data
+# i.e., we consider S as the "truth", and simulate data from this truth
+beta <- rep(0, p)
+beta[S] <- 0.1
+z = x %*% beta
+pr = 1/(1+exp(-z)) 
+y_sim = rbinom(n, 1, pr)   
 
 # now we randomly devide the rest 20000 samples into 50 test dataset, each consisting of 400 samples
 idx_te <- seq(n)[-idx_tr]
@@ -147,7 +156,7 @@ ours <- list()
 uw <- list()
 for(i in seq(length(list_test))){
   x_te <- x[list_test[[i]], ]
-  y_te <- as.numeric(y[list_test[[i]]])
+  y_te <- as.numeric(y_sim[list_test[[i]]])
   
   ## our method:
   ours[[i]] <- run_mk(x = x_te, y = y_te, x_te = x_te, mu = mu, Sigma = Sigma, omega = costs, family = "binomial")
@@ -165,11 +174,11 @@ for (j in seq(length(alpha_list))){
   out_ours <- list()
   out_uw <- list()
   for(i in seq(nrep)){
-    out_ours[[i]] <- compute_measure(out = ours[[i]], costs = costs, truth = S, alpha = alpha_list[j], y_te = y_te)
-    out_uw[[i]] <- compute_measure(out = uw[[i]], costs = costs, truth = S, alpha = alpha_list[j], y_te = y_te)
+    out_ours[[i]] <- compute_measure(out = ours[[i]], costs = costs, truth = S, alpha = alpha_list[j])
+    out_uw[[i]] <- compute_measure(out = uw[[i]], costs = costs, truth = S, alpha = alpha_list[j])
   }
   ratio_ours_w <- matrix(NA, nrep, p)
-  #ratio_ours_r <- matrix(NA, nrep, p)
+  ratio_ours_r <- matrix(NA, nrep, p)
   #ratio_uw_w <- matrix(NA, nrep, p)
   ratio_uw_r <- matrix(NA, nrep, p)
   for (i in seq(nrep)){

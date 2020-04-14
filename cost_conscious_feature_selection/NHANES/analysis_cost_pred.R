@@ -2,7 +2,7 @@
 set.seed(123)
 rm(list = ls())
 library(glmnet)
-library(mknockoff)
+library(cheapknockoff)
 library(knockoff)
 library(ROCR)
 load("diabetes.RData")
@@ -28,21 +28,21 @@ Sigma <- Sigma + diag(0.1, ncol(Sigma))
 ## run multiple knockoff procedure
 run_mk <- function(x, y, x_te, mu, Sigma, omega, family){
   # construct multiple knockoffs
-  x_k <- mknockoff::knockoff_Gaussian(X = x, 
+  x_k <- cheapknockoff::multiple_knockoff_Gaussian(X = x, 
                                       mu = mu,
                                       Sigma = Sigma,
-                                      omega = omega)
+                                      omega = omega, type = "entropy")
   # compute knockoff statistics
-  stat <- mknockoff::stat_glmnet_coef(X = x,
+  stat <- cheapknockoff::stat_glmnet_coef(X = x,
                                       X_k = x_k, 
                                       y = y,
                                       omega = omega, nlam = 100, family = family)
   
   # mk filter: compute the path of select variables
-  path <- mknockoff::mk_path(kappa = stat$kappa, tau = stat$tau)
+  path <- cheapknockoff::generate_path(kappa = stat$kappa, tau = stat$tau)
   
   # given the fitted path of variables, do prediction on the left out data
-  result <- mknockoff::refit(path = path, x = x, y = y, newdata = x_te, family = family)
+  result <- cheapknockoff::refit(path = path, x = x, y = y, newdata = x_te, family = family)
   return(result)
 }
 
@@ -112,7 +112,7 @@ ours <- run_mk(x = x_tr, y = y_tr, x_te = x_te, mu = mu, Sigma = Sigma, omega = 
 costs_amp <- costs^2
 ours_exp <- run_mk(x = x_tr, y = y_tr, x_te = x_te, mu = mu, Sigma = Sigma, omega = costs_amp, family = "binomial")
 
-## mknockoff with no weights
+## cheapknockoff with no weights
 uw <- run_mk(x = x_tr, y = y_tr, x_te = x_te, mu = mu, Sigma = Sigma, omega = rep(2, length(costs)), family = "binomial")
 
 ## run regular knockoff filter
@@ -160,7 +160,7 @@ lr_accu <- performance(lr_pred, measure = "auc")@y.values[[1]]
 
 ## plot results
 #######  cheap costs
-pdf("NHANES.pdf", height = 4, width = 13)
+pdf("cost_pred.pdf", height = 4, width = 13)
 par(mfrow = c(1, 3), mar = c(4.5, 4.5, 1, 1))
 # accuracy
 xlim <- range(c(measure_card[1:2, ], rk_card, lr_card))
@@ -209,7 +209,7 @@ dev.off()
 
 ###### expensive costs
 lr_cost_exp <- sum(costs_amp)
-pdf("NHANES_exp.pdf", height = 4, width = 13)
+pdf("cost_pred_exp.pdf", height = 4, width = 13)
 par(mfrow = c(1, 3), mar = c(4.5, 4.5, 1, 1))
 # accuracy
 xlim <- range(c(measure_card[3:4, ], lr_card))
@@ -281,6 +281,68 @@ for(j in seq(2, p)){
 }
 
 save(inc_our, inc_uw, inc_our_exp, type, name, costs, measure_accu, measure_cost, file = "path.RData")
+
+
+
+#################################################
+# verify that training error is a good approximation to the generalization error
+set.seed(123)
+n <- nrow(x)
+p <- length(costs)
+
+## some measures
+# prediction accuracy
+measure_accu_check <- matrix(NA, nrow = 3, ncol = p)
+
+## start recording classification accuracy and cost
+# consider a subset of data as training set
+idx_tr <- sample(n, 72062)
+x_tr <- x[idx_tr, ]
+y_tr <- as.numeric(y[idx_tr])
+
+# x_te <- x[-idx_tr, ]
+# y_te <- as.numeric(y[-idx_tr])
+x_te <- x[-idx_tr, ]
+y_te <- as.numeric(y[-idx_tr])
+
+## our method:
+ours <- run_mk(x = x_tr, y = y_tr, x_te = x_te, mu = mu, Sigma = Sigma, omega = costs, family = "binomial")
+
+# costs_amp
+costs_amp <- costs^2
+ours_exp <- run_mk(x = x_tr, y = y_tr, x_te = x_te, mu = mu, Sigma = Sigma, omega = costs_amp, family = "binomial")
+
+## cheapknockoff with no weights
+uw <- run_mk(x = x_tr, y = y_tr, x_te = x_te, mu = mu, Sigma = Sigma, omega = rep(2, length(costs)), family = "binomial")
+
+## run regular knockoff filter
+rk <- run_rk(x = x_tr, y = y_tr, x_te = x_te, mu = mu, Sigma = Sigma, family = "binomial")
+
+## run logistic regression on all the 30 variables
+lr <- run_lr(x = x_tr, y = y_tr, x_te = x_te, family = "binomial")
+
+for(j in seq(p)){
+  # record auc
+  pred_ours <- prediction(ours$pred[[j]], y_te)
+  measure_accu_check[1, j] <- performance(pred_ours, measure = "auc")@y.values[[1]]
+  
+  pred_uw <- prediction(uw$pred[[j]], y_te)
+  measure_accu_check[2, j] <- performance(pred_uw, measure = "auc")@y.values[[1]]
+  
+  pred_ours_exp <- prediction(ours_exp$pred[[j]], y_te)
+  measure_accu_check[3, j] <- performance(pred_ours_exp, measure = "auc")@y.values[[1]]
+}
+
+# for regular knockoff and logistic regression
+rk_pred_check <- prediction(rk$pred, y_te)
+rk_accu_check <- performance(rk_pred_check, measure = "auc")@y.values[[1]]
+
+# [-0.01157182, 0.02205140]
+range(measure_accu[1:3, ] - measure_accu_check[1:3, ])
+# 0.00140548
+rk_accu - rk_accu_check
+
+
 
 ### The plotting functions below has been moved to "analysis_all_plot.R"
 
