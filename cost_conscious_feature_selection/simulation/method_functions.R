@@ -13,18 +13,18 @@ regular <- new_method(name = "regular", label = "regular", method = function(mod
 # this is a generic wrapper method to only generate multiple knockoffs
 mk <- new_method(name = "mk", label = "multiple", method = function(model, draw) {
   # construct multiple knockoff variables
-  X_k <- mknockoff::knockoff_Gaussian(X = model$X, 
-                                      mu = model$mu,
-                                      Sigma = model$Sigma,
-                                      omega = model$omega)
+  X_k <- cheapknockoff::multiple_knockoff_Gaussian(X = model$X, 
+                                                   mu = model$mu,
+                                                   Sigma = model$Sigma,
+                                                   omega = model$omega)
   # compute knockoff statistics
-  stat <- mknockoff::stat_glmnet_coef(X = model$X,
-                                      X_k = X_k, 
-                                      y = draw,
-                                      omega = model$omega)
+  stat <- cheapknockoff::stat_glmnet_coef(X = model$X,
+                                          X_k = X_k, 
+                                          y = draw,
+                                          omega = model$omega)
   # mk filter
   # compute the path of select variables
-  path <- mknockoff::mk_path(kappa = stat$kappa, tau = stat$tau)
+  path <- cheapknockoff::generate_path(kappa = stat$kappa, tau = stat$tau)
 
   return(list(X_k = X_k, stat = stat, path = path))
 })

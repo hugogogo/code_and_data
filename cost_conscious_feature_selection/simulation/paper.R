@@ -2,7 +2,7 @@
 rm(list=ls())
 library(simulator)
 library(knockoff)
-library(mknockoff)
+library(cheapknockoff)
 
 source("model_functions.R")
 source("method_functions.R")
