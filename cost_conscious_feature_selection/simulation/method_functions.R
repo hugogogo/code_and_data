@@ -6,7 +6,7 @@ regular <- new_method(name = "regular", label = "regular", method = function(mod
   # compute the path of select variables
   kappa <- (W > 0) * 1
   kappa[kappa == 0] <- 2
-  path <- mknockoff::mk_path(kappa = kappa, tau = abs(W))
+  path <- cheapknockoff::generate_path(kappa = kappa, tau = abs(W))
   return(list(X_k = X_k, stat = list(kappa = kappa, tau = abs(W)), path = path))
 })
 

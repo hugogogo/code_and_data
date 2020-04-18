@@ -9,9 +9,6 @@ load("diabetes.RData")
 
 # for simplicity, just consider all the real-valued features
 x <- raw$features[, -raw$one_hot_idx]
-#x[x <= 1e-10] <- 0
-# blurry
-# x <- x + rnorm(length(x), sd = 0.1)
 
 # the response has three classes normal (0), pre-diabetes (1), and diabetes (2)
 # for simplicity, combine pre-diabetes with diabetes and make it a 2-classification problem
@@ -31,21 +28,21 @@ Sigma <- Sigma + diag(0.1, ncol(Sigma))
 ## run multiple knockoff procedure
 run_mk <- function(x, y, x_te, mu, Sigma, omega, family){
   # construct multiple knockoffs
-  x_k <- mknockoff::knockoff_Gaussian(X = x, 
+  x_k <- cheapknockoff::multiple_knockoff_Gaussian(X = x, 
                                       mu = mu,
                                       Sigma = Sigma,
                                       omega = omega)
   # compute knockoff statistics
-  stat <- mknockoff::stat_glmnet_coef(X = x,
+  stat <- cheapknockoff::stat_glmnet_coef(X = x,
                                       X_k = x_k, 
                                       y = y,
                                       omega = omega, nlam = 100, family = family)
   
   # mk filter: compute the path of select variables
-  path <- mknockoff::mk_path(kappa = stat$kappa, tau = stat$tau)
+  path <- cheapknockoff::generate_path(kappa = stat$kappa, tau = stat$tau)
   
   # given the fitted path of variables, do prediction on the left out data
-  result <- mknockoff::refit(path = path, x = x, y = y, newdata = x_te, family = family)
+  result <- cheapknockoff::refit(path = path, x = x, y = y, newdata = x_te, family = family)
   return(result)
 }
 
@@ -108,10 +105,10 @@ compute_measure <- function(out, costs, truth, alpha = 0.2){
     ub[i] <- (1 + (i - length(select))) / max(sum(costs[select]), 1)
     ubr[i] <- (1 + (i - length(select))) / max(length(select), 1)
   }
-  ub <- max(costs / log(costs - (costs - 1) * (alpha))) * (-log(alpha)) * ub
-  ubr <- (-log(alpha)) / log(2 - alpha)  * ubr
+  ub <- min(max(costs / log(costs - (costs - 1) * (alpha))) * (-log(alpha)) * ub, 1)
+  ubr <- min((-log(alpha)) / log(2 - alpha)  * ubr, 1)
   wo <- costs[-truth]
-  ubo <- max(wo / log(wo - (wo - 1) * (alpha))) * (-log(alpha)) * ub
+  ubo <- min(max(wo / log(wo - (wo - 1) * (alpha))) * (-log(alpha)) * ub, 1)
   
   return(list(wfdp = wfdp, fdp = fdp, ub = ub, ubr = ubr, ubo = ubo, cost = cost))
 }
@@ -121,16 +118,24 @@ compute_measure <- function(out, costs, truth, alpha = 0.2){
 n <- nrow(x)
 p <- length(costs)
 
+n_tr <- 72062
+n_te <- n - n_tr
 # we use 72062 randomly selected sample and run LR on it to get the "truth"
-idx_tr <- sample(n, 72062)
+idx_tr <- sample(n, n_tr)
 x_tr <- x[idx_tr, ]
 y_tr <- as.numeric(y[idx_tr])
 # first run LR to get the "truth"
 truth <- glm(formula = y~., family = "binomial", data = data.frame(y = y_tr, x = x_tr))
 thresh <- 0.01
 thresh_fwer <- thresh / p
+#thresh_fwer <- thresh
 # S is the set of variables that we "believe" to be the "truth"
 S <- as.integer(which(summary(truth)$coefficients[-1, 4] <= thresh_fwer))
+# beta is the corresponding coefficient estimates
+beta <- rep(0, p)
+beta[S] <- as.numeric(summary(truth)$coefficients[-1, 1][S])
+
+a0 <- summary(truth)$coefficients[1, 1]
 
 name[head(order(summary(truth)$coefficients[-1, 4]), length(S))]
 
@@ -140,17 +145,15 @@ name[head(order(summary(truth)$coefficients[-1, 4]), length(S))]
 
 # we consider the partially-simulated data
 # i.e., we consider S as the "truth", and simulate data from this truth
-beta <- rep(0, p)
-beta[S] <- 0.1
-z = x %*% beta
+z = a0 + x %*% beta
 pr = 1/(1+exp(-z)) 
 y_sim = rbinom(n, 1, pr)   
 
 # now we randomly devide the rest 20000 samples into 50 test dataset, each consisting of 400 samples
 idx_te <- seq(n)[-idx_tr]
-nte <- 400
-nrep <- 20000 / nte
-list_test <- split(sample(idx_te), ceiling(seq_along(idx_te)/nte))
+size_te <- 400
+nrep <- n_te / size_te
+list_test <- split(sample(idx_te), ceiling(seq_along(idx_te)/size_te))
 
 ours <- list()
 uw <- list()
@@ -160,7 +163,7 @@ for(i in seq(length(list_test))){
   
   ## our method:
   ours[[i]] <- run_mk(x = x_te, y = y_te, x_te = x_te, mu = mu, Sigma = Sigma, omega = costs, family = "binomial")
-  ## mknockoff with no weights
+  ## cheapknockoff with no weights
   uw[[i]] <- run_mk(x = x_te, y = y_te, x_te = x_te, mu = mu, Sigma = Sigma, omega = rep(2, length(costs)), family = "binomial")
 }
 

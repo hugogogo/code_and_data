@@ -25,7 +25,7 @@ ub <- new_metric("ub", "bound", metric = function(model, out){
   ub <- rep(NA, length = model$p)
   for(i in seq(model$p)){
     select <- out$path[[i]]
-    ub[i] <- (1 + c * (i - length(select))) / max(sum(weight[select]), 1)
+    ub[i] <- min((1 + c * (i - length(select))) / max(sum(weight[select]), 1), 1)
   }
   ub <- ub * multi
   return(ub)
@@ -37,7 +37,7 @@ ubr <- new_metric("ubr", "regular bound", metric = function(model, out){
   multi <- (-log(alpha)) / log(2 - alpha)
   for(i in seq(model$p)){
     select <- out$path[[i]]
-    ub[i] <- (1 + (i - length(select))) / max(length(select), 1)
+    ub[i] <- min((1 + (i - length(select))) / max(length(select), 1), 1)
   }
   ub <- ub * multi
   return(ub)
@@ -52,7 +52,7 @@ ubo <- new_metric("ubo", "oracle bound", metric = function(model, out){
   ub <- rep(NA, length = model$p)
   for(i in seq(model$p)){
     select <- out$path[[i]]
-    ub[i] <- (1 + c * (i - length(select))) / max(sum(weight[select]), 1)
+    ub[i] <- min((1 + c * (i - length(select))) / max(sum(weight[select]), 1), 1)
   }
   ub <- ub * multi
   return(ub)
