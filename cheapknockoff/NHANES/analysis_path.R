@@ -29,7 +29,7 @@ mydf <- data.frame(Cost = unique(measure_cost[1, ]),
 mydf$Name <- paste(mydf$Id, ":", name[inc_our], sep = "")
 
 pdf("path.pdf", height = 9, width = 10)
-p <- ggplot(mydf, aes(Cost, AUC)) + geom_blank() + ggtitle("Our proposal") +
+p <- ggplot(mydf, aes(Cost, AUC)) + geom_blank() + ggtitle("Cheap knockoffs") +
   geom_line(linetype = "dashed")+
   theme_classic(base_size = 20) + 
   scale_y_continuous(limits = c(0.53, 0.77), breaks = seq(from = 0.53,
@@ -112,7 +112,7 @@ mydf <- data.frame(Cost = unique(measure_cost[3, ]),
 mydf$Name <- paste(mydf$Id, ":", name[inc_our_exp], sep = "")
 
 pdf("path_exp.pdf", height = 9, width = 10)
-p <- ggplot(mydf, aes(Cost, AUC)) + geom_blank() + ggtitle("Our proposal (squared costs)") +
+p <- ggplot(mydf, aes(Cost, AUC)) + geom_blank() + ggtitle("Cheap knockoffs (squared costs)") +
   geom_line(linetype = "dashed")+
   theme_classic(base_size = 20) + 
   scale_y_continuous(limits = c(0.53, 0.77), breaks = seq(from = 0.53,
